@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d12">
+  <title>Deadlock Lab — OS Simulator</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d12;
+      --panel: #11141b;
+      --panel-raised: #161a23;
+      --line: #252a36;
+      --text: #edf0f7;
+      --muted: #858b9b;
+      --purple: #a78bfa;
+      --green: #55d6a0;
+      --red: #fb7185;
+      --amber: #f4c16e;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+    }
+    * { box-sizing: border-box; }
+    body { min-width: 320px; margin: 0; background: var(--bg); color: var(--text); }
+    button, select { font: inherit; }
+    button:focus-visible, select:focus-visible { outline: 2px solid var(--purple); outline-offset: 3px; }
+    .shell { max-width: 1440px; margin: 0 auto; padding: 0 42px 48px; }
+    header { height: 76px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 11px; font-size: 14px; font-weight: 700; letter-spacing: -.02em; }
+    .brand-mark { display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid #3b3156; border-radius: 9px; color: var(--purple); background: #1c1728; }
+    .brand-mark svg { width: 17px; }
+    .top-meta { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px #55d6a066; }
+    main { padding-top: 46px; }
+    .eyebrow { display: flex; align-items: center; gap: 9px; color: var(--purple); font-size: 11px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    .eyebrow span { width: 19px; height: 1px; background: currentColor; }
+    h1 { margin: 13px 0 10px; font-size: clamp(31px, 4vw, 44px); line-height: 1.1; letter-spacing: -.055em; }
+    .intro { max-width: 680px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 30px 0 18px; }
+    .scenario-group, .actions { display: flex; align-items: center; gap: 8px; }
+    .toolbar-label { margin-right: 5px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+    button, select { border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--text); }
+    button { min-height: 35px; padding: 0 12px; cursor: pointer; transition: border-color .16s, background .16s, transform .16s; }
+    button:hover { border-color: #49415f; background: #1a1d28; }
+    button:active { transform: translateY(1px); }
+    button.active { border-color: #514270; color: #d7c8ff; background: #211a2e; }
+    button.primary { border-color: #9b7be5; background: #9b7be5; color: #100d16; font-weight: 700; }
+    button.primary:hover { border-color: #b49aff; background: #b49aff; }
+    button.small { min-height: 30px; padding: 0 10px; font-size: 11px; }
+    .toolbar button, .toolbar select { font-size: 12px; }
+    select { min-height: 35px; padding: 0 29px 0 10px; cursor: pointer; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 310px; align-items: start; gap: 16px; }
+    .main-column, .side-column { display: grid; gap: 16px; min-width: 0; }
+    .panel { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); }
+    .panel-head { min-height: 53px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 17px; border-bottom: 1px solid var(--line); }
+    .panel-title { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 700; }
+    .panel-title svg { width: 16px; height: 16px; color: var(--muted); }
+    .head-note { color: var(--muted); font-size: 11px; }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    th { height: 36px; color: #818798; background: #0e1117; font-size: 10px; font-weight: 600; text-align: center; }
+    th:first-child, td:first-child { position: sticky; left: 0; z-index: 1; text-align: left; }
+    th:first-child { padding-left: 17px; background: #0e1117; }
+    td { height: 43px; border-top: 1px solid #20242e; color: #cfd3df; font-size: 11px; text-align: center; }
+    td:first-child { padding-left: 17px; background: var(--panel); font-weight: 700; }
+    .matrix-divider { border-left: 1px solid #34303f; }
+    .process-name { display: inline-flex; align-items: center; gap: 8px; }
+    .process-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--purple); }
+    .process-dot.blocked { background: var(--red); }
+    .process-dot.ready { background: var(--green); }
+    .number { font-variant-numeric: tabular-nums; }
+    .waiting { color: var(--red); font-weight: 700; }
+    .allocated { color: #d7c8ff; }
+    .matrix-legend { display: flex; gap: 14px; padding: 11px 17px 13px; color: var(--muted); font-size: 10px; }
+    .legend-key { display: flex; align-items: center; gap: 6px; }
+    .legend-swatch { width: 6px; height: 6px; border-radius: 50%; background: #c7a9ff; }
+    .legend-swatch.red { background: var(--red); }
+    .detection-content { padding: 16px 17px; }
+    .work-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+    .work-label { margin-right: 4px; color: var(--muted); font-size: 11px; }
+    .resource-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; color: #cdd1dc; font-size: 10px; }
+    .resource-chip strong { color: var(--text); font-variant-numeric: tabular-nums; }
+    .detect-result { display: flex; align-items: flex-start; gap: 11px; margin-top: 15px; padding: 12px; border: 1px solid #294539; border-radius: 8px; background: #101a17; }
+    .detect-result.danger { border-color: #4c2932; background: #1c1218; }
+    .result-icon { display: grid; flex: 0 0 24px; width: 24px; height: 24px; place-items: center; border-radius: 50%; color: var(--green); background: #1b372b; }
+    .danger .result-icon { color: var(--red); background: #3a1d26; }
+    .result-icon svg { width: 13px; height: 13px; }
+    .result-copy strong { display: block; margin: 1px 0 4px; font-size: 11px; }
+    .result-copy p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+    .cycle { color: #ff9eaa; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .side-panel-body { padding: 15px; }
+    .status-card { padding: 13px; border: 1px solid #4b2932; border-radius: 8px; background: #1a1218; }
+    .status-card.safe { border-color: #294539; background: #101a17; }
+    .status-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .status-title { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; }
+    .status-badge { padding: 4px 6px; border-radius: 4px; color: #ff9eaa; background: #3a1d26; font-size: 9px; font-weight: 700; letter-spacing: .04em; }
+    .safe .status-badge { color: #78e5b6; background: #1b372b; }
+    .status-card p { margin: 9px 0 0; color: var(--muted); font-size: 10px; line-height: 1.65; }
+    .subhead { margin: 17px 0 9px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .control-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .control-row select { width: 100%; min-width: 0; font-size: 11px; }
+    .full-button { width: 100%; margin-top: 8px; font-size: 11px; }
+    .strategy-select { width: 100%; font-size: 11px; }
+    .strategy-note { min-height: 40px; margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+    .timeline { display: grid; gap: 0; }
+    .event { display: grid; grid-template-columns: 17px 1fr; gap: 9px; padding: 0 0 13px; }
+    .event:last-child { padding-bottom: 0; }
+    .event-mark { position: relative; display: flex; justify-content: center; }
+    .event-mark::after { position: absolute; top: 9px; bottom: -4px; width: 1px; background: var(--line); content: ""; }
+    .event:last-child .event-mark::after { display: none; }
+    .event-mark span { z-index: 1; width: 7px; height: 7px; margin-top: 3px; border: 2px solid #5c4b7b; border-radius: 50%; background: var(--panel); }
+    .event.latest .event-mark span { border-color: var(--purple); background: var(--purple); }
+    .event p { margin: 0; color: #c4c8d4; font-size: 10px; line-height: 1.55; }
+    .event time { display: block; margin-top: 3px; color: #717788; font-size: 9px; }
+    .concepts { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 17px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+    .concept { padding: 14px 16px; }
+    .concept + .concept { border-left: 1px solid var(--line); }
+    .concept-number { display: block; margin-bottom: 7px; color: var(--purple); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
+    .concept strong { display: block; margin-bottom: 4px; font-size: 10px; }
+    .concept p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.55; }
+    .toast { position: fixed; right: 24px; bottom: 24px; z-index: 5; max-width: min(380px, calc(100vw - 32px)); padding: 11px 15px; border: 1px solid #514270; border-radius: 8px; background: #211a2e; color: #e8ddff; box-shadow: 0 12px 35px #0008; font-size: 12px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: opacity .2s, transform .2s; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 900px) {
+      .shell { padding-right: 24px; padding-left: 24px; }
+      .workspace { grid-template-columns: minmax(0, 1fr) 275px; gap: 12px; }
+      .toolbar { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 700px) {
+      .shell { padding-right: 16px; padding-left: 16px; }
+      main { padding-top: 32px; }
+      .workspace { grid-template-columns: 1fr; }
+      .side-column { grid-template-columns: 1fr 1fr; align-items: start; }
+      .side-column > :last-child { grid-column: 1 / -1; }
+      .concepts { grid-template-columns: 1fr 1fr; }
+      .concept:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
+      .concept:nth-child(4) { border-top: 1px solid var(--line); }
+    }
+    @media (max-width: 480px) {
+      header { height: 63px; }
+      .top-meta { font-size: 10px; }
+      .side-column { grid-template-columns: 1fr; }
+      .side-column > :last-child { grid-column: auto; }
+      .scenario-group { flex-wrap: wrap; }
+      .toolbar-label { width: 100%; }
+      .actions { width: 100%; }
+      .actions select { flex: 1; }
+      .concept { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.2 7.4 10.7 16M15.8 7.4 13.3 16M8.5 6h7"/></svg>
+        </span>
+        deadlock<span style="color:var(--purple)">.lab</span>
+      </div>
+      <div class="top-meta"><span class="live-dot"></span> Interactive OS simulator <span aria-hidden="true">·</span> v1.0</div>
+    </header>
+
+    <main>
+      <div class="eyebrow"><span></span> Operating systems / synchronization</div>
+      <h1>Deadlock Detection &amp; Prevention</h1>
+      <p class="intro">Watch processes compete for limited resources. Create a deadlock, run the detection algorithm, then experiment with strategies that prevent one from forming.</p>
+
+      <div class="toolbar">
+        <div class="scenario-group" aria-label="Choose a scenario">
+          <span class="toolbar-label">Load scenario</span>
+          <button class="scenario-button active" data-scenario="deadlock">Deadlock</button>
+          <button class="scenario-button" data-scenario="safe">Safe state</button>
+          <button class="scenario-button" data-scenario="random">Randomize</button>
+        </div>
+        <div class="actions">
+          <select id="prevention-top" aria-label="Prevention strategy">
+            <option value="none">Prevention: off</option>
+            <option value="ordering">Resource ordering</option>
+            <option value="hold">No hold &amp; wait</option>
+          </select>
+          <button class="primary" id="detect-button">Run detection <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+
+      <div class="workspace">
+        <div class="main-column">
+          <section class="panel" aria-labelledby="snapshot-title">
+            <div class="panel-head">
+              <div class="panel-title" id="snapshot-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 5.5h16M4 12h16M4 18.5h16"/><circle cx="8" cy="5.5" r="1.5" fill="var(--panel)"/><circle cx="15" cy="12" r="1.5" fill="var(--panel)"/><circle cx="10" cy="18.5" r="1.5" fill="var(--panel)"/></svg>
+                System snapshot
+              </div>
+              <span class="head-note" id="table-caption">3 processes · 3 resource types</span>
+            </div>
+            <div class="table-scroll">
+              <table aria-label="Process allocation and outstanding request matrix">
+                <thead id="matrix-head"></thead>
+                <tbody id="matrix-body"></tbody>
+              </table>
+            </div>
+            <div class="matrix-legend">
+              <span class="legend-key"><span class="legend-swatch"></span> Resources allocated</span>
+              <span class="legend-key"><span class="legend-swatch red"></span> Outstanding request</span>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="detection-title">
+            <div class="panel-head">
+              <div class="panel-title" id="detection-title">Detection algorithm <span class="head-note">· multiple resource instances</span></div>
+              <button class="small" id="step-button">Step through</button>
+            </div>
+            <div class="detection-content">
+              <div class="work-row" id="work-vector"></div>
+              <div class="detect-result danger" id="detection-result" aria-live="polite">
+                <div class="result-icon" id="result-icon"></div>
+                <div class="result-copy">
+                  <strong id="result-title">Deadlock detected</strong>
+                  <p id="result-description"></p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="side-column">
+          <section class="panel" aria-labelledby="controls-title">
+            <div class="panel-head"><div class="panel-title" id="controls-title">Process controls</div></div>
+            <div class="side-panel-body">
+              <div class="status-card" id="status-card">
+                <div class="status-top">
+                  <div class="status-title"><span id="status-symbol"></span> System status</div>
+                  <span class="status-badge" id="status-badge">DEADLOCK</span>
+                </div>
+                <p id="status-description"></p>
+              </div>
+
+              <div class="subhead">Request a resource</div>
+              <div class="control-row">
+                <select id="process-select" aria-label="Process"></select>
+                <select id="resource-select" aria-label="Resource"></select>
+              </div>
+              <button class="full-button" id="request-button">＋ &nbsp;Request resource</button>
+
+              <div class="subhead">Prevention strategy</div>
+              <select class="strategy-select" id="strategy-select" aria-label="Prevention strategy">
+                <option value="none">Off — allow all requests</option>
+                <option value="ordering">Resource ordering</option>
+                <option value="hold">No hold &amp; wait</option>
+              </select>
+              <p class="strategy-note" id="strategy-note"></p>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="activity-title">
+            <div class="panel-head"><div class="panel-title" id="activity-title">Activity log</div><span class="head-note" id="event-count">3 events</span></div>
+            <div class="side-panel-body"><div class="timeline" id="activity-log"></div></div>
+          </section>
+        </aside>
+      </div>
+
+      <section class="concepts" aria-label="Deadlock conditions">
+        <div class="concept"><span class="concept-number">01 / 04</span><strong>Mutual exclusion</strong><p>A resource can be held by only one process at a time.</p></div>
+        <div class="concept"><span class="concept-number">02 / 04</span><strong>Hold &amp; wait</strong><p>A process holds resources while waiting for others.</p></div>
+        <div class="concept"><span class="concept-number">03 / 04</span><strong>No preemption</strong><p>Resources cannot be forcibly taken from a process.</p></div>
+        <div class="concept"><span class="concept-number">04 / 04</span><strong>Circular wait</strong><p>Processes form a cycle, each waiting on the next.</p></div>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      const icons = {
+        safe: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 8 3.2 3L13 4.5"/></svg>',
+        deadlock: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 4 8 8m0-8-8 8"/></svg>'
+      };
+      const strategyNotes = {
+        none: "Requests are granted whenever resources are available; waiting can create a circular dependency.",
+        ordering: "Resources are ordered R1 → R2 → R3. A process holding a later resource cannot request an earlier one.",
+        hold: "A process holding any resource cannot request another; release held resources before trying again."
+      };
+      const presets = {
+        deadlock: {
+          resources: ["R1", "R2", "R3"],
+          processes: [
+            { allocation: [1, 0, 0], request: [0, 1, 0] },
+            { allocation: [0, 1, 0], request: [1, 0, 0] },
+            { allocation: [0, 0, 1], request: [0, 0, 0] }
+          ]
+        },
+        safe: {
+          resources: ["R1", "R2", "R3"],
+          processes: [
+            { allocation: [0, 1, 0], request: [1, 0, 0] },
+            { allocation: [0, 0, 1], request: [0, 1, 0] },
+            { allocation: [0, 0, 0], request: [0, 0, 1] }
+          ]
+        }
+      };
+      let state;
+      let events = [];
+      let detection;
+      let stepTimer;
+      let toastTimer;
+
+      const $ = (selector) => document.querySelector(selector);
+
+      function cloneScenario(source) {
+        return {
+          resources: [...source.resources],
+          total: source.resources.map(() => 1),
+          processes: source.processes.map((process) => ({
+            allocation: [...process.allocation],
+            request: [...process.request]
+          }))
+        };
+      }
+
+      function availableVector() {
+        return state.resources.map((_, index) =>
+          state.total[index] - state.processes.reduce((sum, process) => sum + process.allocation[index], 0)
+        );
+      }
+
+      function addEvent(message) {
+        events.unshift({ message, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
+        events = events.slice(0, 5);
+      }
+
+      function showToast(message) {
+        const toast = $("#toast");
+        toast.textContent = message;
+        toast.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
+      }
+
+      function inspectSystem() {
+        const work = availableVector();
+        const finish = state.processes.map((process) =>
+          process.allocation.every((count) => count === 0) && process.request.every((count) => count === 0)
+        );
+        const sequence = [];
+        let changed = true;
+        while (changed) {
+          changed = false;
+          state.processes.forEach((process, index) => {
+            if (!finish[index] && process.request.every((count, resource) => count <= work[resource])) {
+              process.allocation.forEach((count, resource) => { work[resource] += count; });
+              finish[index] = true;
+              sequence.push(index);
+              changed = true;
+            }
+          });
+        }
+        return {
+          available: availableVector(),
+          sequence,
+          blocked: finish.flatMap((isFinished, index) => isFinished ? [] : [index])
+        };
+      }
+
+      function renderMatrix() {
+        const names = state.resources;
+        $("#table-caption").textContent = `${state.processes.length} processes · ${names.length} resource types`;
+        $("#matrix-head").innerHTML = `<tr><th scope="col">PROCESS</th><th scope="colgroup" colspan="${names.length}">ALLOCATION</th><th class="matrix-divider" scope="colgroup" colspan="${names.length}">REQUEST</th></tr><tr><th scope="col"></th>${names.map((name) => `<th scope="col">${name}</th>`).join("")}${names.map((name, index) => `<th class="${index === 0 ? "matrix-divider" : ""}" scope="col">${name}</th>`).join("")}</tr>`;
+        $("#matrix-body").innerHTML = state.processes.map((process, processIndex) => {
+          const isBlocked = process.request.some((count) => count > 0);
+          const hasAllocation = process.allocation.some((count) => count > 0);
+          const dotClass = isBlocked ? "blocked" : hasAllocation ? "" : "ready";
+          return `<tr><td><span class="process-name"><span class="process-dot ${dotClass}"></span>P${processIndex}</span></td>${process.allocation.map((count) => `<td class="number allocated">${count}</td>`).join("")}${process.request.map((count, index) => `<td class="number ${index === 0 ? "matrix-divider " : ""}${count > 0 ? "waiting" : ""}">${count}</td>`).join("")}</tr>`;
+        }).join("");
+      }
+
+      function renderDetection() {
+        const outcome = inspectSystem();
+        $("#work-vector").innerHTML = `<span class="work-label">Available / Work</span>${state.resources.map((name, index) => `<span class="resource-chip">${name} <strong>${outcome.available[index]}</strong></span>`).join("")}`;
+        const isDeadlocked = outcome.blocked.length > 0;
+        const result = $("#detection-result");
+        result.classList.toggle("danger", isDeadlocked);
+        $("#result-icon").innerHTML = isDeadlocked ? icons.deadlock : icons.safe;
+        $("#result-title").textContent = isDeadlocked ? "Deadlock detected" : "No deadlock — safe sequence found";
+        $("#result-description").innerHTML = isDeadlocked
+          ? `No unfinished process can proceed. Stuck processes: <span class="cycle">${outcome.blocked.map((index) => `P${index}`).join(", ")}</span>.`
+          : `All processes can finish in order: <span class="cycle">${outcome.sequence.map((index) => `P${index}`).join(" → ")}</span>. Released resources keep the system moving.`;
+        $("#status-card").classList.toggle("safe", !isDeadlocked);
+        $("#status-badge").textContent = isDeadlocked ? "DEADLOCK" : "SAFE STATE";
+        $("#status-symbol").textContent = isDeadlocked ? "⊗" : "✓";
+        $("#status-description").textContent = isDeadlocked
+          ? `${outcome.blocked.map((index) => `P${index}`).join(" and ")} cannot finish. No remaining resources satisfy their outstanding requests.`
+          : `A safe execution order exists. Every process can finish and release its resources.`;
+        detection = outcome;
+        return outcome;
+      }
+
+      function renderControls() {
+        $("#process-select").innerHTML = state.processes.map((_, index) => `<option value="${index}">Process P${index}</option>`).join("");
+        $("#resource-select").innerHTML = state.resources.map((name, index) => `<option value="${index}">${name}</option>`).join("");
+        const strategy = $("#strategy-select").value;
+        $("#prevention-top").value = strategy;
+        $("#strategy-note").textContent = strategyNotes[strategy];
+      }
+
+      function renderLog() {
+        $("#event-count").textContent = `${events.length} event${events.length === 1 ? "" : "s"}`;
+        $("#activity-log").innerHTML = events.map((event, index) => `<div class="event ${index === 0 ? "latest" : ""}"><div class="event-mark"><span></span></div><div><p>${event.message}</p><time>${event.time}</time></div></div>`).join("");
+      }
+
+      function render() {
+        renderMatrix();
+        renderDetection();
+        renderControls();
+        renderLog();
+      }
+
+      function loadScenario(name) {
+        clearInterval(stepTimer);
+        if (name === "random") {
+          const base = cloneScenario(presets.safe);
+          base.processes = base.processes.map(() => ({ allocation: [0, 0, 0], request: [0, 0, 0] }));
+          const resourceOrder = base.resources.map((_, index) => index).sort(() => Math.random() - 0.5);
+          base.processes.forEach((process, index) => { process.allocation[resourceOrder[index]] = 1; });
+          const first = Math.floor(Math.random() * base.processes.length);
+          const second = (first + 1 + Math.floor(Math.random() * (base.processes.length - 1))) % base.processes.length;
+          const firstHeld = base.processes[first].allocation.findIndex((count) => count > 0);
+          const secondHeld = base.processes[second].allocation.findIndex((count) => count > 0);
+          if (firstHeld !== secondHeld) {
+            base.processes[first].request[secondHeld] = 1;
+            base.processes[second].request[firstHeld] = 1;
+          }
+          state = base;
+          addEvent("Random resource allocation generated.");
+        } else {
+          state = cloneScenario(presets[name]);
+          addEvent(name === "deadlock" ? "Loaded a circular-wait deadlock scenario." : "Loaded a safe-state scenario.");
+        }
+        document.querySelectorAll(".scenario-button").forEach((button) => button.classList.toggle("active", button.dataset.scenario === name));
+        render();
+      }
+
+      function requestResource() {
+        const processIndex = Number($("#process-select").value);
+        const resourceIndex = Number($("#resource-select").value);
+        const process = state.processes[processIndex];
+        const strategy = $("#strategy-select").value;
+        const held = process.allocation.findIndex((count) => count > 0);
+
+        if (strategy === "hold" && held !== -1) {
+          showToast(`Request denied: P${processIndex} must release its held resource before requesting another.`);
+          addEvent(`No hold & wait denied P${processIndex}'s request for ${state.resources[resourceIndex]}.`);
+          renderLog();
+          return;
+        }
+        if (strategy === "ordering" && held > resourceIndex) {
+          showToast(`Request denied: ${state.resources[resourceIndex]} comes before the resource P${processIndex} already holds.`);
+          addEvent(`Resource ordering denied P${processIndex}'s request for ${state.resources[resourceIndex]}.`);
+          renderLog();
+          return;
+        }
+        if (process.request[resourceIndex] > 0) {
+          showToast(`P${processIndex} is already waiting for ${state.resources[resourceIndex]}.`);
+          return;
+        }
+
+        const available = availableVector()[resourceIndex];
+        if (available > 0) {
+          process.allocation[resourceIndex] += 1;
+          addEvent(`P${processIndex} acquired ${state.resources[resourceIndex]}.`);
+          showToast(`Granted ${state.resources[resourceIndex]} to P${processIndex}.`);
+        } else {
+          process.request[resourceIndex] += 1;
+          addEvent(`P${processIndex} is waiting for ${state.resources[resourceIndex]}.`);
+          showToast(`${state.resources[resourceIndex]} is busy; request queued for P${processIndex}.`);
+        }
+        render();
+      }
+
+      function runDetection() {
+        const outcome = inspectSystem();
+        addEvent(outcome.blocked.length
+          ? `Detection found a deadlock involving ${outcome.blocked.map((index) => `P${index}`).join(", ")}.`
+          : `Detection found a safe sequence: ${outcome.sequence.map((index) => `P${index}`).join(" → ")}.`);
+        render();
+      }
+
+      function stepDetection() {
+        clearInterval(stepTimer);
+        const outcome = inspectSystem();
+        const sequence = outcome.sequence;
+        const finish = state.processes.map((process, index) =>
+          outcome.blocked.indexOf(index) === -1 &&
+          (sequence.includes(index) || (process.allocation.every((count) => count === 0) && process.request.every((count) => count === 0)))
+        );
+        let cursor = 0;
+        addEvent("Stepping through the detection algorithm.");
+        render();
+        stepTimer = setInterval(() => {
+          if (cursor < sequence.length) {
+            addEvent(`P${sequence[cursor]} can finish and release its resources.`);
+            cursor += 1;
+            renderLog();
+            if (cursor === sequence.length && cursor === state.processes.length) {
+              clearInterval(stepTimer);
+              showToast("Detection complete: all processes can finish.");
+            }
+          } else {
+            clearInterval(stepTimer);
+            const blocked = state.processes.flatMap((_, index) => finish[index] ? [] : [index]);
+            if (blocked.length) {
+              addEvent(`No process can proceed; deadlocked: ${blocked.map((index) => `P${index}`).join(", ")}.`);
+              renderLog();
+              showToast(`Deadlock confirmed in ${blocked.map((index) => `P${index}`).join(", ")}.`);
+            } else if (!sequence.length) {
+              showToast("Detection complete: no unfinished processes.");
+            } else {
+              showToast("Detection complete: all processes can finish.");
+            }
+          }
+        }, 700);
+      }
+
+      $("#detect-button").addEventListener("click", runDetection);
+      $("#step-button").addEventListener("click", stepDetection);
+      $("#request-button").addEventListener("click", requestResource);
+      $("#strategy-select").addEventListener("change", () => {
+        $("#prevention-top").value = $("#strategy-select").value;
+        renderControls();
+        addEvent(`Prevention strategy set to ${$("#strategy-select").selectedOptions[0].text}.`);
+        renderLog();
+      });
+      $("#prevention-top").addEventListener("change", () => {
+        $("#strategy-select").value = $("#prevention-top").value;
+        renderControls();
+        addEvent(`Prevention strategy set to ${$("#strategy-select").selectedOptions[0].text}.`);
+        renderLog();
+      });
+      document.querySelectorAll(".scenario-button").forEach((button) => {
+        button.addEventListener("click", () => loadScenario(button.dataset.scenario));
+      });
+
+      state = cloneScenario(presets.deadlock);
+      addEvent("Loaded a circular-wait deadlock scenario.");
+      addEvent("Simulator initialized with three single-instance resources.");
+      addEvent("P0 holds R1 and waits for R2; P1 holds R2 and waits for R1.");
+      render();
+    })();
+  </script>
+</body>
+</html>
